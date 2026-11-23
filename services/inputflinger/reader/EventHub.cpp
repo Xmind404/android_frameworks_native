@@ -1690,6 +1690,35 @@ bool EventHub::setKeyboardLayoutOverlay(RawDeviceId deviceId,
     if (device == nullptr || device->keyMap.keyCharacterMap == nullptr) {
         return false;
     }
+
+    // Only the BlackBerry provider's matching physical-family overlays can
+    // replace STMPE keys safely. Generic PC maps omit its Alt/Sym behaviors.
+    if (device->identifier.name.find("stmpe") != std::string::npos &&
+        device->identifier.name.find("keypad") != std::string::npos) {
+        const std::string nativeMap = device->keyMap.keyCharacterMap->getLoadFileName();
+        const std::string nativeFile = std::filesystem::path(nativeMap).filename().string();
+        std::string family;
+        if (nativeFile == "stmpe.kcm") {
+            family = "qwerty";
+        } else if (nativeFile == "stmpe_azerty.kcm") {
+            family = "azerty";
+        } else if (nativeFile == "stmpe_qwertz.kcm") {
+            family = "qwertz";
+        }
+        const std::string overlay = map == nullptr ? "<none>" : map->getLoadFileName();
+        const std::string prefix =
+                "org.lineageos.blackberry.inputdevices/"
+                "org.lineageos.blackberry.inputdevices.InputDeviceReceiver/keyboard_" + family + "_";
+        if (map == nullptr || family.empty() || overlay.compare(0, prefix.size(), prefix) != 0) {
+            device->keyMap.keyCharacterMap->clearLayoutOverlay();
+            ALOGI("BlackBerry KCM: native=%s requested=%s action=native",
+                  nativeMap.c_str(), overlay.c_str());
+            return true;
+        }
+        ALOGI("BlackBerry KCM: native=%s requested=%s action=apply",
+              nativeMap.c_str(), overlay.c_str());
+    }
+
     if (map == nullptr) {
         device->keyMap.keyCharacterMap->clearLayoutOverlay();
         return true;
